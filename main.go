@@ -8,9 +8,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/bishisimo/supernova/utils"
 	"github.com/BurntSushi/toml"
 	. "github.com/bishisimo/s3c"
+	"github.com/bishisimo/supernova/utils"
 	"github.com/sirupsen/logrus"
 	"os"
 	"path"
@@ -82,7 +82,7 @@ func main() {
 		*storeOption.DestPath = path.Join(*connectOption.DbName, *queryOption.TableName, timePoint+".csv")
 	}
 	filePath := *queryOption.TableName + "_" + timePoint + ".csv"
-    // 数据查询
+	// 数据查询
 	db := utils.NewMdbc(connectOption)
 	data := db.SelectFilter(queryOption)
 	defer func() {
@@ -110,9 +110,10 @@ func main() {
 		logrus.Info("文件储存在本地:", filePath)
 		*storeOption.IsRetainLocal = true
 	case "s3":
+		logrus.Info("文件上传中...:", *storeOption.DestPath)
 		s3Connector := NewS3Connector()
 		_ = s3Connector
-		s3Connector.UploadFileByFP(fp, *storeOption.DestPath)
+		s3Connector.UploadFileByFP(fp, path.Join("data", *storeOption.DestPath))
 	default:
 		logrus.Error("暂未支持,储存至本地:", filePath)
 		*storeOption.IsRetainLocal = true
