@@ -10,15 +10,15 @@ import (
 	"os"
 )
 
-type Option struct {
+type ConfigOption struct {
 	*ConnectOption `toml:"connectOption"`
 	*QueryOption   `toml:"queryOption"`
 	*StoreOption   `toml:"storeOption"`
 	*S3Option      `toml:"s3Option"`
 }
 
-func NewOption() *Option {
-	return &Option{
+func NewOption() *ConfigOption {
+	return &ConfigOption{
 		ConnectOption: NewConnectOption(),
 		QueryOption:   NewQueryOption(),
 		StoreOption:   NewStoreOption(),
@@ -27,22 +27,69 @@ func NewOption() *Option {
 }
 
 type ConnectOption struct {
-	DriveName *string `toml:"drive"` // 数据库名
-	UserName  *string `toml:"user"`  // 用户名
-	Password  *string `toml:"password"`  // 密码
-	Ip        *string `toml:"ip"`        // 数据库IP
-	Port      *uint   `toml:"port"`      // 端口
-	DbName    *string `toml:"db"`    // 数据库名
+	DriveName *string `toml:"drive"`    // 数据库名
+	UserName  *string `toml:"user"`     // 用户名
+	Password  *string `toml:"password"` // 密码
+	Ip        *string `toml:"ip"`       // 数据库IP
+	Port      *uint   `toml:"port"`     // 端口
+	DbName    *string `toml:"db"`       // 数据库名
+}
+
+func (o *ConnectOption) Merge(option *ConnectOption) {
+	if *o.DriveName != "" {
+		option.DriveName = o.DriveName
+	}
+	if *o.UserName != "" {
+		option.UserName = o.UserName
+	}
+	if *o.Password != "" {
+		option.Password = o.Password
+	}
+	if *o.Ip != "" {
+		option.Ip = o.Ip
+	}
+	if *o.Port != 0 {
+		option.Port = o.Port
+	}
+	if *o.DbName != "" {
+		option.DbName = o.DbName
+	}
+	*o = *option
 }
 
 type QueryOption struct {
 	TableName      *string `toml:"table"`          // 表名
-	FieldSelect    *string `toml:"select"`               // 查询字段
-	FieldFlag      *string `toml:"field"`      // 增量标记字段
-	StartFlag      *string `toml:"start"`      // 增量起始标志
-	UnitFlag       *string `toml:"unit"`       // 增量起始标志增加单位
+	FieldSelect    *string `toml:"select"`         // 查询字段
+	FieldFlag      *string `toml:"field"`          // 增量标记字段
+	StartFlag      *string `toml:"start"`          // 增量起始标志
+	UnitFlag       *string `toml:"unit"`           // 增量起始标志增加单位
 	IsStartContain *bool   `toml:"isStartContain"` // 增量是否包含起始值
-	QueryContext   *string `toml:"query"`   // 自定义查询文本
+	QueryContext   *string `toml:"query"`          // 自定义查询文本
+}
+
+func (o *QueryOption) Merge(option *QueryOption) {
+	if *o.TableName != "" {
+		option.TableName = o.TableName
+	}
+	if *o.FieldSelect != "" {
+		option.FieldSelect = o.FieldSelect
+	}
+	if *o.FieldFlag != "" {
+		option.FieldFlag = o.FieldFlag
+	}
+	if *o.StartFlag != "" {
+		option.StartFlag = o.StartFlag
+	}
+	if *o.UnitFlag != "" {
+		option.UnitFlag = o.UnitFlag
+	}
+	if !*o.IsStartContain {
+		option.IsStartContain = o.IsStartContain
+	}
+	if *o.QueryContext != "" {
+		option.QueryContext = o.QueryContext
+	}
+	*o = *option
 }
 
 type StoreOption struct {
@@ -51,12 +98,58 @@ type StoreOption struct {
 	IsRetainLocal *bool   `toml:"isRetainLocal"` //是否删除本地文件
 }
 
+func (o *StoreOption) Merge(option *StoreOption) {
+	if *o.DestType != "" {
+		option.DestType = o.DestType
+	}
+
+	if *o.DestPath != "" {
+		option.DestPath = o.DestPath
+	}
+
+	if !*o.IsRetainLocal {
+		option.IsRetainLocal = o.IsRetainLocal
+	}
+
+	*o = *option
+}
+
 type S3Option struct {
 	S3Id       *string `toml:"s3Id"`
 	S3Secret   *string `toml:"s3Secret"`
 	S3Endpoint *string `toml:"s3Endpoint"`
 	S3Region   *string `toml:"s3Region"`
 	S3Bucket   *string `toml:"s3Bucket"`
+}
+
+func (o *S3Option) Merge(option *S3Option) {
+	if *o.S3Id != "" {
+		option.S3Id = o.S3Id
+	}
+
+	if *o.S3Secret != "" {
+		option.S3Secret = o.S3Secret
+	}
+
+	if *o.S3Endpoint != "" {
+		option.S3Endpoint = o.S3Endpoint
+	}
+	if *o.S3Region != "" {
+		option.S3Region = o.S3Region
+	}
+	if *o.S3Bucket != "" {
+		option.S3Bucket = o.S3Bucket
+	}
+
+	*o = *option
+}
+
+func (o S3Option) SetEnv() {
+	_ = os.Setenv("S3Id", *o.S3Id)
+	_ = os.Setenv("S3Secret", *o.S3Secret)
+	_ = os.Setenv("S3Endpoint", *o.S3Endpoint)
+	_ = os.Setenv("S3Region", *o.S3Region)
+	_ = os.Setenv("S3Bucket", *o.S3Bucket)
 }
 
 func NewConnectOption() *ConnectOption {
@@ -91,8 +184,8 @@ func NewStoreOption() *StoreOption {
 }
 
 func NewS3Option() *S3Option {
-	getEnv:=func (key string) *string {
-		result:=os.Getenv(key)
+	getEnv := func(key string) *string {
+		result := os.Getenv(key)
 		return &result
 	}
 	return &S3Option{
@@ -139,7 +232,7 @@ func NewStoreOptionWithFlag() *StoreOption {
 }
 
 func NewS3OptionWithFlag() *S3Option {
-	result:=&S3Option{
+	result := &S3Option{
 		S3Id:       flag.String("s3Id", "", "s3的accessId"),
 		S3Secret:   flag.String("s3Secret", "", "s3的accessSecret"),
 		S3Endpoint: flag.String("s3Endpoint", "", "s3的endpoint"),

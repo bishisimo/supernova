@@ -49,27 +49,13 @@ func main() {
 		if err != nil {
 			logrus.Panic("解析配置文件异常:", err)
 		}
-		connectOption = option.ConnectOption
-		queryOption = option.QueryOption
-		storeOption = option.StoreOption
-		s3Option = option.S3Option
+		connectOption.Merge(option.ConnectOption)
+		queryOption.Merge(option.QueryOption)
+		storeOption.Merge(option.StoreOption)
+		s3Option.Merge(option.S3Option)
 	}
 	// 配置S3环境变量
-	if *s3Option.S3Id != "" {
-		_ = os.Setenv("S3Id", *s3Option.S3Id)
-	}
-	if *s3Option.S3Secret != "" {
-		_ = os.Setenv("S3Secret", *s3Option.S3Secret)
-	}
-	if *s3Option.S3Endpoint != "" {
-		_ = os.Setenv("S3Endpoint", *s3Option.S3Endpoint)
-	}
-	if *s3Option.S3Region != "" {
-		_ = os.Setenv("S3Region", *s3Option.S3Region)
-	}
-	if *s3Option.S3Bucket != "" {
-		_ = os.Setenv("S3Bucket", *s3Option.S3Bucket)
-	}
+	s3Option.SetEnv()
 	// 其他参数初始化
 	var timePoint string
 	if t, err := time.Parse("2006-01-02 15:04:05", *queryOption.StartFlag); err == nil {
