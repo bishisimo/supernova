@@ -3,12 +3,14 @@
 @time 2020/4/8 16:35
 @describe:
 */
-package utils
+package db
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/bishisimo/supernova/utils"
+	"github.com/bishisimo/supernova/utils/option"
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
 	//_ " github.com/mattn/go-oci8"
@@ -29,7 +31,7 @@ type Mdbc struct {
 	DbMongo     *mongo.Database
 }
 
-func NewMdbc(dco *ConnectOption) *Mdbc {
+func NewMdbc(dco *option.ConnectOption) *Mdbc {
 	defaultPort := map[string]uint{
 		"mysql":      3306,
 		"mongo":      27017,
@@ -43,29 +45,29 @@ func NewMdbc(dco *ConnectOption) *Mdbc {
 		"oracle":     false,
 		"postgresql": false,
 	}
-	if dp := defaultPort[*dco.DriveName]; dp != 0 && *dco.Port == 0 {
-		*dco.Port = dp
+	if dp := defaultPort[dco.DriveName]; dp != 0 && dco.Port == 0 {
+		dco.Port = dp
 	} else {
-		logrus.Panic(*dco.DriveName, "数据库暂未支持自动获取默认端口")
+		logrus.Panic(dco.DriveName, "数据库暂未支持自动获取默认端口")
 	}
 	var db *xorm.Engine
 	var mongoClient *mongo.Client
 	var dbMongo *mongo.Database
 	var err error
-	switch *dco.DbName {
+	switch dco.DbName {
 	case "mongo":
-		dataSourceName := fmt.Sprintf("mongodb://%s:%d", *dco.Ip, *dco.Port)
+		dataSourceName := fmt.Sprintf("mongodb://%s:%d", dco.Ip, dco.Port)
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 		mongoClient, err = mongo.Connect(ctx, options.Client().ApplyURI(dataSourceName))
 		if err != nil {
 			logrus.Panic("mongo连接失败:", err)
 		}
-		dbMongo = mongoClient.Database(*dco.DbName)
+		dbMongo = mongoClient.Database(dco.DbName)
 	default:
-		if sqlEngineSupper[*dco.DriveName] {
+		if sqlEngineSupper[dco.DriveName] {
 			dataSourceName := fmt.Sprintf("%s:%s@(%s:%d)/%s?charset=utf8",
-				*dco.UserName, *dco.Password, *dco.Ip, *dco.Port, *dco.DbName)
-			db, _ = xorm.NewEngine(*dco.DriveName, dataSourceName)
+				dco.UserName, dco.Password, dco.Ip, dco.Port, dco.DbName)
+			db, _ = xorm.NewEngine(dco.DriveName, dataSourceName)
 			err := db.Ping()
 			if err != nil {
 				logrus.Panic("连接数据库失败！:", err)
@@ -83,7 +85,7 @@ func NewMdbc(dco *ConnectOption) *Mdbc {
 }
 
 //按指定条件过滤查询
-func (m Mdbc) SelectFilter(qo *QueryOption) *[]map[string]string {
+func (m Mdbc) SelectFilter(qo *option.QueryOption) *[]map[string]string {
 	var results *[]map[string]string
 	if m.DbEngine != nil {
 		results = m.OrmQuery(qo)
@@ -95,28 +97,28 @@ func (m Mdbc) SelectFilter(qo *QueryOption) *[]map[string]string {
 	return results
 }
 
-func (m Mdbc) OrmQuery(qo *QueryOption) *[]map[string]string {
+func (m Mdbc) OrmQuery(qo *option.QueryOption) *[]map[string]string {
 	var results []map[string]string
 	var err error
 	var queryContext string
-	if *qo.FieldSelect==""{
-		*qo.FieldSelect="*"
+	if qo.FieldSelect == "" {
+		qo.FieldSelect = "*"
 	}
-	queryContext = fmt.Sprintf("select %s from `%s` ", *qo.FieldSelect, *qo.TableName)
-	if *qo.QueryContext != "" {
-		queryContext = *qo.QueryContext
-	} else if *qo.FieldFlag != "" && *qo.StartFlag != "" {
-		if *qo.IsStartContain {
-			queryContext += fmt.Sprintf("where `%s`>='%s' ", *qo.FieldFlag, *qo.StartFlag)
+	queryContext = fmt.Sprintf("select %s from `%s` ", qo.FieldSelect, qo.TableName)
+	if qo.QueryContext != "" {
+		queryContext = qo.QueryContext
+	} else if qo.FieldFlag != "" && qo.StartFlag != "" {
+		if qo.IsStartContain {
+			queryContext += fmt.Sprintf("where `%s`>='%s' ", qo.FieldFlag, qo.StartFlag)
 		} else {
-			queryContext += fmt.Sprintf("where `%s`>'%s' ", *qo.FieldFlag, *qo.StartFlag)
+			queryContext += fmt.Sprintf("where `%s`>'%s' ", qo.FieldFlag, qo.StartFlag)
 		}
-		if t, err := time.Parse("2006-01-02 15:04:05", *qo.StartFlag); err == nil {
-			t=EndTimeCalculate(t,*qo.UnitFlag)
-			queryContext += fmt.Sprintf("and `%s` < '%s' ", *qo.FieldFlag, t.Format("2006-01-02 15:04:05"))
+		if t, err := time.Parse("2006-01-02 15:04:05", qo.StartFlag); err == nil {
+			t = utils.EndTimeCalculate(t, qo.UnitFlag)
+			queryContext += fmt.Sprintf("and `%s` < '%s' ", qo.FieldFlag, t.Format("2006-01-02 15:04:05"))
 		}
 	}
-	fmt.Println("queryContext:",queryContext)
+	fmt.Println("queryContext:", queryContext)
 	results, err = m.DbEngine.QueryString(queryContext)
 	if err != nil {
 		logrus.Panic("查询失败", err)
@@ -124,39 +126,39 @@ func (m Mdbc) OrmQuery(qo *QueryOption) *[]map[string]string {
 	return &results
 }
 
-func (m Mdbc) MongoQuery(qo *QueryOption) *[]map[string]string {
+func (m Mdbc) MongoQuery(qo *option.QueryOption) *[]map[string]string {
 	results := make([]map[string]string, 0, 10000)
-	collection := m.DbMongo.Collection(*qo.TableName)
+	collection := m.DbMongo.Collection(qo.TableName)
 	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 	filter := bson.M{}
-	if *qo.QueryContext != "" { // 指定查询语句
-		err := json.Unmarshal([]byte(*qo.QueryContext), &filter)
+	if qo.QueryContext != "" { // 指定查询语句
+		err := json.Unmarshal([]byte(qo.QueryContext), &filter)
 		if err != nil {
-			fmt.Println(*qo.QueryContext)
+			fmt.Println(qo.QueryContext)
 			logrus.Panic("反序列化失败:", err)
 		}
-	} else if *qo.FieldFlag != "" && *qo.StartFlag != "" { // 指定查询字段
+	} else if qo.FieldFlag != "" && qo.StartFlag != "" { // 指定查询字段
 		isNumber := true
-		for _, c := range *qo.StartFlag {
+		for _, c := range qo.StartFlag {
 			if !unicode.IsNumber(c) {
 				isNumber = false
 			}
 		}
 		if isNumber {
-			sti, _ := strconv.Atoi(*qo.StartFlag)
-			if *qo.IsStartContain {
-				filter[*qo.FieldFlag] = bson.M{"$gte": sti}
+			sti, _ := strconv.Atoi(qo.StartFlag)
+			if qo.IsStartContain {
+				filter[qo.FieldFlag] = bson.M{"$gte": sti}
 			} else {
-				filter[*qo.FieldFlag] = bson.M{"$gt": sti}
+				filter[qo.FieldFlag] = bson.M{"$gt": sti}
 			}
 		} else {
-			if *qo.IsStartContain {
-				filter[*qo.FieldFlag] = bson.M{"$gte": *qo.StartFlag}
+			if qo.IsStartContain {
+				filter[qo.FieldFlag] = bson.M{"$gte": qo.StartFlag}
 			} else {
-				filter[*qo.FieldFlag] = bson.M{"$gt": *qo.StartFlag}
+				filter[qo.FieldFlag] = bson.M{"$gt": qo.StartFlag}
 			}
-			if t, err := time.Parse("2006-01-02 15:04:05", *qo.StartFlag); err == nil {
-				switch *qo.UnitFlag {
+			if t, err := time.Parse("2006-01-02 15:04:05", qo.StartFlag); err == nil {
+				switch qo.UnitFlag {
 				case "hour":
 					t = t.Add(time.Second * 3600)
 					t = time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, time.Local)
@@ -172,7 +174,7 @@ func (m Mdbc) MongoQuery(qo *QueryOption) *[]map[string]string {
 				default:
 					t = time.Now()
 				}
-				filter[*qo.FieldFlag].(bson.M)["$lt"] = t.Format("2006-01-02")
+				filter[qo.FieldFlag].(bson.M)["$lt"] = t.Format("2006-01-02")
 			}
 		}
 	}
